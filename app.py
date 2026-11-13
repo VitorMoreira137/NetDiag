@@ -2,6 +2,7 @@ import streamlit as st
 from modules.ping import ping_host
 from modules.traceroute import trace_route
 from modules.dns_lookup import dns_lookup
+from modules.port_scanner import scan_ports
 
 st.set_page_config(
     page_title="NetDiag",
@@ -25,9 +26,103 @@ menu = st.sidebar.radio(
     ]
 )
 
+
 if menu == "Dashboard":
-    st.header("Network Overview")
-    st.info("Welcome to NetDiag!")
+
+    st.markdown("---")
+
+    st.subheader("Network Overview")
+
+    st.write(
+        "NetDiag is a Python-based network diagnostic "
+        "tool designed to analyze connectivity, network "
+        "routes, DNS resolution and TCP services."
+    )
+
+    # General metrics
+    col1, col2, col3, col4 = st.columns(4)
+
+    col1.metric("Diagnostic Tools", "4")
+    col2.metric("Protocols", "ICMP / TCP / DNS")
+    col3.metric("IP Versions", "IPv4 / IPv6*")
+    col4.metric("Platform", "Windows")
+
+    st.markdown("---")
+
+    # Available tools
+    st.subheader("Available Tools")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+
+        with st.container(border=True):
+
+            st.subheader("📡 Ping Monitor")
+
+            st.write(
+                "Test network connectivity and measure "
+                "round-trip latency and packet loss."
+            )
+
+            st.caption("Technology: ICMP")
+
+        with st.container(border=True):
+
+            st.subheader("🔎 DNS Lookup")
+
+            st.write(
+                "Resolve domain names and retrieve "
+                "IPv4 and IPv6 addresses."
+            )
+
+            st.caption("Technology: DNS / Socket")
+
+    with col2:
+
+        with st.container(border=True):
+
+            st.subheader("🌍 Traceroute")
+
+            st.write(
+                "Discover the network path between "
+                "your computer and a destination."
+            )
+
+            st.caption("Technology: Traceroute / ICMP")
+
+        with st.container(border=True):
+
+            st.subheader("🔌 TCP Port Scanner")
+
+            st.write(
+                "Check TCP ports and identify "
+                "services accepting connections."
+            )
+
+            st.caption("Technology: TCP / Socket")
+
+    st.markdown("---")
+
+    # Getting started
+    st.subheader("Getting Started")
+
+    st.info(
+        "Select a diagnostic tool from the sidebar "
+        "to start analyzing a network destination."
+    )
+
+    st.caption(
+        "* IPv6 support is currently available in DNS Lookup. "
+        "Ping and Port Scanner currently use IPv4."
+    )
+
+    st.markdown("---")
+
+    st.caption(
+        "NetDiag | Developed with Python and Streamlit"
+    )
+
 
 elif menu == "Ping Monitor":
     st.header("Ping Monitor")
@@ -219,7 +314,137 @@ elif menu == "DNS Lookup":
                 st.metric("Total IP Addresses", total)
 
 
+
 elif menu == "Port Scanner":
-    st.header("Port Scanner")
+
+    st.header("TCP Port Scanner")
+    st.write("Scan TCP ports on a target host.")
+
+    st.warning(
+        "Only scan devices and networks you own "
+        "or have authorization to test."
+    )
+
+    host = st.text_input(
+        "Target hostname or IP address:",
+        placeholder="Example: google.com"
+    )
+
+    scan_mode = st.radio(
+        "Port selection:",
+        ["Common ports", "Custom range"],
+        horizontal=True
+    )
+
+    common_ports = [
+        21, 22, 25, 53, 80, 443, 3306, 5432
+    ]
+
+    if scan_mode == "Common ports":
+
+        ports = st.multiselect(
+            "Select ports to scan:",
+            options=common_ports,
+            default=[22, 80, 443, 3306]
+        )
+
+    else:
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            start_port = st.number_input(
+                "First port:",
+                min_value=1,
+                max_value=65535,
+                value=1
+            )
+
+        with col2:
+            end_port = st.number_input(
+                "Last port:",
+                min_value=1,
+                max_value=65535,
+                value=100
+            )
+
+        ports = (
+            list(range(int(start_port), int(end_port) + 1))
+            if end_port >= start_port
+            else []
+        )
+
+        if len(ports) > 100:
+            st.warning("Please select a range of up to 100 ports.")
+            ports = []
+
+    timeout = st.slider(
+        "Connection timeout (seconds):",
+        min_value=1,
+        max_value=5,
+        value=2
+    )
+
+    if st.button("Start Port Scan"):
+
+        if not host.strip():
+            st.warning("Please enter a target hostname or IP.")
+
+        elif not ports:
+            st.warning("Please select at least one valid port.")
+
+        else:
+
+            with st.spinner("Scanning TCP ports..."):
+                result = scan_ports(host.strip(), ports, timeout)
+
+            if "error" in result:
+
+                st.error(result["error"])
+
+            else:
+
+                st.subheader("Scan Results")
+
+                st.write(f"**Target:** {result['host']}")
+                st.write(f"**IP Address:** {result['ip']}")
+
+                
+                open_ports = [
+                    item for item in result["results"]
+                    if item["state"] == "Open"
+                ]
+
+                closed_ports = [
+                    item for item in result["results"]
+                    if item["state"] == "Closed"
+                ]
+
+                timeout_ports = [
+                    item for item in result["results"]
+                    if item["state"] == "Timeout"
+                ]
+
+                error_ports = [
+                    item for item in result["results"]
+                    if item["state"] == "Error"
+                ]
+
+                col1, col2, col3, col4 = st.columns(4)
+
+                col1.metric("Open", len(open_ports))
+                col2.metric("Closed", len(closed_ports))
+                col3.metric("Timeout", len(timeout_ports))
+                col4.metric("Error", len(error_ports))
+
+                st.subheader("Port Details")
+
+                st.dataframe(
+                    result["results"],
+                    use_container_width=True,
+                    hide_index=True
+                )
+   
+
 
 print("Executado!!")
